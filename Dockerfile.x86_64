@@ -1,0 +1,22 @@
+# GMS 文件载体镜像 / GMS file carrier image
+# 本镜像仅用于存储GMS文件，安装时通过 docker cp 提取到标准版redroid容器
+# This image only stores GMS files, extracted via docker cp during installation
+# 不运行任何服务 / Does not run any services
+
+FROM busybox:latest
+
+LABEL maintainer="androidemu" \
+      description="GMS (Google Mobile Services) file carrier for androidemu" \
+      usage="docker create --name gms_temp <image> && docker cp gms_temp:/gms/. /tmp/gms/ && docker rm gms_temp" \
+      license="GMS is proprietary software of Google LLC. This image is for personal research only."
+
+# 解压GMS文件到 /gms 目录
+# Extract GMS files to /gms directory
+COPY gms_files.tar.gz /tmp/gms_files.tar.gz
+RUN mkdir -p /gms && tar -xzf /tmp/gms_files.tar.gz -C /gms && rm /tmp/gms_files.tar.gz
+
+# 列出文件用于验证 / List files for verification
+RUN find /gms -type f | wc -l && du -sh /gms
+
+# 保持容器运行以便docker cp / Keep container running for docker cp
+CMD ["sleep", "infinity"]
