@@ -13,13 +13,12 @@
 
 ## 镜像地址
 
-| 架构 | 稳定版（推荐） | 最新版 |
-|------|---------------|--------|
-| x86_64 | `ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0` | `ghcr.io/lin1740/androidemu-gms:x86_64-latest` |
-| arm64 | `ghcr.io/lin1740/androidemu-gms:arm64-1.0.0` | `ghcr.io/lin1740/androidemu-gms:arm64-latest` |
+| 架构 | 镜像 |
+|------|------|
+| x86_64 | `ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0` |
+| arm64 | `ghcr.io/lin1740/androidemu-gms:arm64-1.0.0` |
 
-- **稳定版（1.0.0）**：androidemu FPK 安装包默认使用，与特定版本的安装脚本对应，可复现、可回滚
-- **最新版（latest）**：始终指向最新构建，方便手动测试，不建议生产环境使用
+- 镜像采用固定版本号（如1.0.0），与androidemu FPK安装包版本对应，可复现、可回滚
 - 镜像内GMS文件位于 `/gms/` 目录，安装时通过 `docker create` + `docker export` 提取
 
 ## 构建前准备
@@ -75,10 +74,7 @@ tar -czf gms_files.tar.gz -C mtg system/
 cd x86_64/
 docker build -t ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0 \
   --label "org.opencontainers.image.source=https://github.com/lin1740/androidemu-gms" .
-# 同时打latest标签
-docker tag ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0 ghcr.io/lin1740/androidemu-gms:x86_64-latest
 docker push ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0
-docker push ghcr.io/lin1740/androidemu-gms:x86_64-latest
 ```
 
 ### arm64（在ARM机器上）
@@ -90,10 +86,7 @@ cd arm64/
 mkdir -p gms
 tar -xzf gms_files.tar.gz -C gms
 docker build -t ghcr.io/lin1740/androidemu-gms:arm64-1.0.0 .
-# 同时打latest标签
-docker tag ghcr.io/lin1740/androidemu-gms:arm64-1.0.0 ghcr.io/lin1740/androidemu-gms:arm64-latest
 docker push ghcr.io/lin1740/androidemu-gms:arm64-1.0.0
-docker push ghcr.io/lin1740/androidemu-gms:arm64-latest
 ```
 
 ### 一键脚本
