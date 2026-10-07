@@ -49,10 +49,10 @@ GMS（Google Mobile Services）是 Google LLC 的专有软件，受中华人民�
 
 | 架构 | 镜像 | 大小 |
 |------|------|------|
-| x86_64 | `ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0` | ~698MB |
-| arm64 | `ghcr.io/lin1740/androidemu-gms:arm64-1.0.0` | ~563MB |
+| x86_64 | `ghcr.io/lin1740/androidemu-gms:x86_64` | ~698MB |
+| arm64 | `ghcr.io/lin1740/androidemu-gms:arm64` | ~563MB |
 
-- 镜像采用固定版本号（如1.0.0），与androidemu FPK安装包版本对应，可复现、可回滚
+- 镜像采用固定架构标签（x86_64/arm64），更新时直接覆盖同标签，用户无需关心版本号
 - 镜像内GMS文件位于 `/gms/` 目录，安装时通过 `docker create` + `docker export` 提取到安卓容器的系统分区
 - x86_64版本GMS文件从第三方redroid衍生镜像（whojk/redroid:12.0.0_mindthegapps）提取
 - arm64版本GMS文件从MindTheGapps 12.1.0-arm64官方发布包提取
@@ -108,9 +108,9 @@ tar -czf gms_files.tar.gz -C mtg system/
 
 ```bash
 cd x86_64/
-docker build -t ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0 \
+docker build -t ghcr.io/lin1740/androidemu-gms:x86_64 \
   --label "org.opencontainers.image.source=https://github.com/lin1740/androidemu-gms" .
-docker push ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0
+docker push ghcr.io/lin1740/androidemu-gms:x86_64
 ```
 
 ### arm64（在ARM机器上）
@@ -121,8 +121,8 @@ docker push ghcr.io/lin1740/androidemu-gms:x86_64-1.0.0
 cd arm64/
 mkdir -p gms
 tar -xzf gms_files.tar.gz -C gms
-docker build -t ghcr.io/lin1740/androidemu-gms:arm64-1.0.0 .
-docker push ghcr.io/lin1740/androidemu-gms:arm64-1.0.0
+docker build -t ghcr.io/lin1740/androidemu-gms:arm64 .
+docker push ghcr.io/lin1740/androidemu-gms:arm64
 ```
 
 ### 一键脚本
@@ -156,9 +156,9 @@ bash build_gms_images.sh
    - 重新构建镜像时，应记录GMS文件的来源、版本、提取时间，便于追溯
 
 2. **版本管理**：
-   - 镜像标签采用固定版本号（如1.0.0），不使用latest浮动标签
-   - 每次GMS内容变更（更换来源、增删组件、更新版本）应发布新版本号，并在androidemu安装包中同步更新引用的版本号
-   - 旧版本镜像应保留，便于用户回滚和问题定位
+   - 镜像标签采用固定架构标签（x86_64/arm64），更新时直接覆盖同标签，用户无需关心版本号
+   - 每次GMS内容变更（更换来源、增删组件、更新版本）直接覆盖推送同标签，androidemu安装包无需修改
+   - 如需保留历史版本，可额外打版本号标签（如x86_64-20261007），但主标签始终为x86_64/arm64
 
 3. **镜像公开设置**：
    - 镜像需设为公开（Public）才能匿名拉取，设置路径：Package settings → Danger Zone → Change visibility → Public
