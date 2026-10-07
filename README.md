@@ -239,7 +239,6 @@ bash build_gms_images.sh
 如需商业使用，必须：
 1. 获得Google的正式授权（如MADA协议）
 2. 自行评估并承担所有法律风险和合规责任
-3. 遵守所依赖的开源项目（redroid、scrcpy-over-webrtc等）的许可协议
 
 ### 免责
 
