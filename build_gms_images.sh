@@ -1,94 +1,77 @@
 #!/bin/bash
-### build_gms_images.sh — 构建GMS文件载体镜像并推送到GHCR
-### build_gms_images.sh — Build GMS file carrier images and push to GHCR
+### build_gms_images.sh — 多版本 GMS 载体镜像构建与推送（Android 10~16）
 ###
-### 用法 / Usage:
-###   ./build_gms_images.sh <github-username> [--push]
+### 目录即版本：gms-image/<安卓主版本>/<架构>/gms_files.tar.gz
+###   → 构建并推送 ghcr.io/lin1740/androidemu-gms:<主版本>-<架构>
+###   例：12/x86_64 → ghcr.io/lin1740/androidemu-gms:12-x86_64
 ###
-### 示例 / Example:
-###   ./build_gms_images.sh myusername          # 仅本地构建 / Build only
-###   ./build_gms_images.sh myusername --push   # 构建并推送 / Build and push
+### Android 12 额外维护旧版 tag（:x86_64 / :arm64，与 3.9.1/3.9.2 的
+### install_gms.sh 历史行为兼容）。
 ###
-### 前置条件 / Prerequisites:
-###   - Docker 已安装并运行 / Docker installed and running
-###   - x86_64/gms_files.tar.gz 和 arm64/gms_files.tar.gz 已存在
-###   - 推送需先登录GHCR: echo $GHCR_TOKEN | docker login ghcr.io -u <username> --password-stdin
+### 用法：
+###   ./build_gms_images.sh <github用户名> [--push] [--only <主版本>]
+### 示例：
+###   ./build_gms_images.sh lin1740 --push            # 构建并推送全部
+###   ./build_gms_images.sh lin1740 --push --only 11  # 只构建 Android 11
+###
+### 前置：echo $GHCR_TOKEN | docker login ghcr.io -u <用户名> --password-stdin
+### 架构：x86_64 载体在 x86_64 宿主构建；arm64 载体在 arm64 宿主构建
+###       （或用 docker buildx build --platform linux/arm64）
 
-set -e
-
+set +e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-USERNAME="${1:-}"
-PUSH="${2:-}"
-
-if [ -z "$USERNAME" ]; then
-    echo "错误 / Error: 请提供GitHub用户名 / Please provide GitHub username"
-    echo "用法 / Usage: $0 <github-username> [--push]"
-    exit 1
-fi
-
+USERNAME="${1:-}"; shift || true
+PUSH=0; ONLY=""
+while [ -n "$1" ]; do
+    case "$1" in
+        --push) PUSH=1 ;;
+        --only) shift; ONLY="$1" ;;
+    esac
+    shift
+done
+[ -z "$USERNAME" ] && { echo "用法: $0 <github用户名> [--push] [--only <主版本>]"; exit 1; }
 IMAGE_BASE="ghcr.io/${USERNAME}/androidemu-gms"
+HOST_ARCH=$(uname -m)
+
+echo "GMS 多版本载体构建 → ${IMAGE_BASE}"
+echo "宿主架构: ${HOST_ARCH}（构建对应架构的载体；跨架构用 buildx）"
+
+built=0; skipped=0; failed=0
+for VER_DIR in "$SCRIPT_DIR"/*/; do
+    VER=$(basename "$VER_DIR")
+    case "$VER" in 10|11|12|13|14|15|16) ;; *) continue ;; esac
+    [ -n "$ONLY" ] && [ "$VER" != "$ONLY" ] && continue
+    for ARCH_DIR in "$VER_DIR"/*/; do
+        ARCH=$(basename "$ARCH_DIR")
+        [ -f "$ARCH_DIR/gms_files.tar.gz" ] || { continue; }
+        TAG="${VER}-${ARCH}"
+        echo "------------------------------------------"
+        echo "构建 ${IMAGE_BASE}:${TAG}"
+        cd "$ARCH_DIR" || continue
+        [ -d gms ] || tar -xzf gms_files.tar.gz -C . 2>/dev/null
+        # 归档内为 system/... 时需放入 gms/ 下
+        if [ -d system ] && [ ! -d gms ]; then mkdir -p gms && mv system gms/; fi
+        docker build -q -t "${IMAGE_BASE}:${TAG}" . >/dev/null 2>&1 \
+            && { echo "  ✅ 构建完成"; built=$((built+1)); } \
+            || { echo "  ✗ 构建失败"; failed=$((failed+1)); continue; }
+        if [ "$PUSH" = "1" ]; then
+            if docker push "${IMAGE_BASE}:${TAG}" >/dev/null 2>&1; then
+                echo "  ✅ 已推送 ${IMAGE_BASE}:${TAG}"
+            else
+                echo "  ✗ 推送失败"; failed=$((failed+1))
+            fi
+        fi
+        # Android 12 额外维护旧版 tag（兼容 3.9.x install_gms.sh 历史行为）
+        if [ "$VER" = "12" ]; then
+            LEGACY="$ARCH"
+            docker tag "${IMAGE_BASE}:${TAG}" "${IMAGE_BASE}:${LEGACY}" 2>/dev/null
+            [ "$PUSH" = "1" ] && docker push "${IMAGE_BASE}:${LEGACY}" >/dev/null 2>&1 \
+                && echo "  ✅ 旧版 tag 同步: ${IMAGE_BASE}:${LEGACY}"
+        fi
+        cd "$SCRIPT_DIR"
+    done
+done
 
 echo "=========================================="
-echo "GMS镜像构建 / GMS Image Build"
-echo "镜像基名 / Image base: $IMAGE_BASE"
-echo "=========================================="
-
-### 构建x86_64镜像 / Build x86_64 image
-echo ""
-echo "[1/2] 构建x86_64镜像 / Building x86_64 image..."
-cd "$SCRIPT_DIR/x86_64"
-
-if [ ! -f "gms_files.tar.gz" ]; then
-    echo "错误 / Error: x86_64/gms_files.tar.gz 不存在 / not found"
-    exit 1
-fi
-
-docker build -t "${IMAGE_BASE}:x86_64-latest" .
-echo "x86_64镜像构建完成 / x86_64 image built: ${IMAGE_BASE}:x86_64-latest"
-
-### 构建arm64镜像 / Build arm64 image
-echo ""
-echo "[2/2] 构建arm64镜像 / Building arm64 image..."
-cd "$SCRIPT_DIR/arm64"
-
-if [ ! -f "gms_files.tar.gz" ]; then
-    echo "错误 / Error: arm64/gms_files.tar.gz 不存在 / not found"
-    exit 1
-fi
-
-# arm64镜像需要在arm64设备上构建，或用buildx交叉编译
-# arm64 image must be built on arm64 device or via buildx
-ARCH=$(uname -m)
-if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-    docker build -t "${IMAGE_BASE}:arm64-latest" .
-    echo "arm64镜像构建完成 / arm64 image built: ${IMAGE_BASE}:arm64-latest"
-else
-    echo "警告 / Warning: 当前架构为 $ARCH，arm64镜像需在arm64设备上构建"
-    echo "  Current arch is $ARCH, arm64 image must be built on arm64 device"
-    echo "  或使用buildx: docker buildx build --platform linux/arm64 -t ${IMAGE_BASE}:arm64-latest ."
-fi
-
-### 推送 / Push
-if [ "$PUSH" = "--push" ]; then
-    echo ""
-    echo "=========================================="
-    echo "推送镜像到GHCR / Pushing to GHCR"
-    echo "=========================================="
-
-    echo "推送x86_64 / Pushing x86_64..."
-    docker push "${IMAGE_BASE}:x86_64-latest"
-
-    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-        echo "推送arm64 / Pushing arm64..."
-        docker push "${IMAGE_BASE}:arm64-latest"
-    fi
-
-    echo ""
-    echo "推送完成 / Push complete!"
-    echo "x86_64: ${IMAGE_BASE}:x86_64-latest"
-    echo "arm64:  ${IMAGE_BASE}:arm64-latest"
-else
-    echo ""
-    echo "本地构建完成 / Local build complete (未推送 / not pushed)"
-    echo "加 --push 参数可推送到GHCR / Add --push to push to GHCR"
-fi
+echo "完成：成功 $built，失败 $failed"
+[ "$PUSH" != "1" ] && echo "（未推送；加 --push 推送到 GHCR）"
